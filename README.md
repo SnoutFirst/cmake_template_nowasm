@@ -13,7 +13,30 @@ harness, CPack packaging and the large GitHub Actions matrix — and changes onl
 these things:
 
 * the WebAssembly/Emscripten target, its workflow and its documentation are gone;
-* the FTXUI example game is replaced by a minimal C++23 hello-world CLI.
+* the FTXUI example game is replaced by a minimal C++23 hello-world CLI;
+* *Use this template* is wired up again: the cleanup workflow that renames a
+  generated repository is back (see
+  [What the cleanup workflow changes](#what-the-cleanup-workflow-changes)).
+
+## Getting Started
+
+First, click the green *Use this template* button near the top of this page.
+That takes you to GitHub's
+[*Generate Repository*](https://github.com/SnoutFirst/cmake_template_nowasm/generate)
+page: fill in a repository name and a short description, and click *Create
+repository from template*.
+
+After creating the project please wait until the cleanup workflow has finished
+setting up your project and committed the changes.
+
+Now you can clone the project locally and get to work:
+
+```sh
+git clone https://github.com/<user>/<your_new_repo>.git
+```
+
+What the workflow did to get there is described in
+[What the cleanup workflow changes](#what-the-cleanup-workflow-changes).
 
 ## Download
 
@@ -69,6 +92,9 @@ configured `config.hpp` exercised.
   it as a workflow artifact, attaches the archives to a rolling `ci-latest`
   release and publishes a download page to GitHub Pages — the same mechanism
   used by [QtWatchAllVideos](https://github.com/SnoutFirst/QtWatchAllVideos).
+* **The cleanup workflow restored.** A repository generated from this template
+  is renamed, documented and cleaned up by
+  `.github/workflows/template-janitor.yml`, exactly as upstream does it.
 * **Two fixes the upstream generation step left behind.** `CMakePresets.json`
   still named its analyzer options `myproject_*`, so the Windows presets
   disabled nothing and `presets.windows_disables_static_analysis` failed; and
@@ -116,11 +142,35 @@ Windows). Uploading it to Codecov requires a `CODECOV_TOKEN` secret; the upload
 step is skipped while the secret is unset, and runs with `fail_ci_if_error` as
 soon as it is configured.
 
-## Using it as a template
+## What the cleanup workflow changes
 
-The repository is a GitHub template: *Use this template* → *Create a new
-repository*. The rename workflow of the upstream project is not part of this
-variant, so replace `cmake_template_nowasm` with your project name yourself
-(`grep -rl` over the tree finds every occurrence: `CMakeLists.txt`,
-`ProjectOptions.cmake`, `Dependencies.cmake`, `src/`, `include/`, `test/`,
-`configured_files/`, `.github/constants.env`, the presets and this README).
+[`.github/workflows/template-janitor.yml`](.github/workflows/template-janitor.yml)
+runs on the first push to a repository created from this template (`push`,
+`pull_request` and a published `release`, but it only commits when the
+repository is no longer marked as a template). It:
+
+* replaces `cmake_template_nowasm` with your repository's name — with `-` and
+  `.` turned into `_`, because the name is also a C++ identifier and the prefix
+  of every CMake option — in every tracked file: `CMakeLists.txt`,
+  `ProjectOptions.cmake`, the presets, the headers, the tests, the includes,
+  the CI matrix and the page scripts. `SnoutFirst/cmake_template_nowasm`
+  becomes your `<org>/<repo>`, so the project URL and the download-page
+  defaults follow too;
+* renames `include/cmake_template_nowasm/` to match;
+* writes `README.md` for your project from `.github/template/README.md`, with
+  your description and your download-page URL filled in;
+* removes `.github/template/` and the workflow itself;
+* builds the result with `-D<project>_PACKAGING_MAINTAINER_MODE=ON` (sanitizers,
+  clang-tidy, cppcheck and IPO/LTO off, so it needs no extra tooling) and only
+  then commits everything as *Template Janitor*.
+
+While this repository is still a GitHub template the same job is a dry run: it
+renames with deliberately awkward fake names (`my-unsafe.project`, a
+description full of quotes and pipes) and commits nothing, so a rename that
+would break the project fails CI here rather than in somebody's new repository.
+
+The placeholder names it looks for are in `.github/template/template_name` and
+`.github/template/template_repository`, so they survive a rename of this
+repository. Nothing else needs renaming by hand; `grep -rl
+cmake_template_nowasm .` finds every occurrence if you would rather do it
+yourself.

@@ -1,0 +1,186 @@
+# Rename the template's placeholders to the name of the repository it was
+# generated into, write a README for the new project, and remove the machinery
+# that only means anything in the template itself.
+#
+# This repository is still marked as a GitHub template, so the whole thing runs
+# as a dry run on every push and pull request: the renames are applied with
+# deliberately awkward fake names, the result is built, and nothing is
+# committed. A rename that would break the project therefore fails CI here
+# instead of in somebody else's new repository. Only a repository that is *not*
+# a template gets the cleanup commit, and it deletes this workflow as part of
+# it.
+#
+# This is upstream's cpp-best-practices/cmake_template template-janitor, minus
+# its template-rename job: the placeholder here is the repository's own name,
+# so it does not follow renames, and there is no LICENSE or FUNDING.yml to
+# remove, so the removal-list is gone too.
+
+name: Template Janitor
+
+on:
+  pull_request:
+  release:
+    types: [published]
+  push:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: write
+
+env:
+  TEMPLATES_PATH: .github/template
+
+jobs:
+  template-cleanup:
+    name: Rename the template to this repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the template's placeholders
+        run: |
+          echo "TEMPLATE_NAME=$(cat "$TEMPLATES_PATH/template_name")" >> $GITHUB_ENV
+          echo "TEMPLATE_REPOSITORY=$(cat "$TEMPLATES_PATH/template_repository")" >> $GITHUB_ENV
+
+      - name: Get organization and project name
+        run: |
+          echo "NEW_ORG=${{ github.repository_owner }}" >> $GITHUB_ENV
+          echo "NEW_PROJECT=${{ github.event.repository.name }}" >> $GITHUB_ENV
+
+      - uses: octokit/request-action@v2.x
+        id: get_repo_meta
+        with:
+          route: GET /repos/${{ github.repository_owner }}/${{ github.event.repository.name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Export the description
+        if: fromJson(steps.get_repo_meta.outputs.data).is_template == false
+        run: |
+          # A description is user data: it may contain quotes, pipes and
+          # backslashes, which the sed below escapes. Keeping it in a heredoc
+          # is what makes the quotes harmless here; the delimiter is verbose in
+          # the hope that nobody puts it in a description.
+          echo NEW_DESCRIPTION="$(cat <<'do;not(include}this[in%the$description'
+          ${{ fromJson(steps.get_repo_meta.outputs.data).description }}
+          do;not(include}this[in%the$description
+          )" >> $GITHUB_ENV
+
+      - name: Use testing variables while this is still the template
+        if: fromJson(steps.get_repo_meta.outputs.data).is_template == true
+        run: |
+          # Dry run: exercise the same code path with a name that is awkward on
+          # purpose (hyphen, dot) and a description full of sed metacharacters.
+          echo "NEW_PROJECT=my-unsafe.project" >> $GITHUB_ENV
+          NEW_DESCRIPTION=$(cat <<'EOF'
+          Unsafe because of "quotes" and unbalanced "quotes ('Also' 'unbalanced single). The sed uses | and used to have /. Variable expansion might be bad $GITHUB_ENV as well. Also \ should stay.
+          EOF
+          )
+          echo "NEW_DESCRIPTION=$NEW_DESCRIPTION" >> $GITHUB_ENV
+
+      - name: Add safe replacement variable versions
+        run: |
+          # Hyphens and dots are not valid in C++ identifiers, and the project
+          # name becomes one (option prefixes, target names, include path).
+          NEW_SAFE_PROJECT=$(printf '%s' "$NEW_PROJECT" | sed 's/-/_/g; s/\./_/g')
+          echo "NEW_SAFE_PROJECT=$NEW_SAFE_PROJECT" >> $GITHUB_ENV
+          # sed uses | as its delimiter here, so escape backslashes (first, or
+          # the escape for | would be escaped again) and then the pipes.
+          NEW_SAFE_DESCRIPTION=$(printf '%s' "$NEW_DESCRIPTION" | sed 's/\\/\\\\/g; s/|/\\|/g')
+          echo "NEW_SAFE_DESCRIPTION=$NEW_SAFE_DESCRIPTION" >> $GITHUB_ENV
+
+      - name: Rename the placeholders
+        run: |
+          set -euo pipefail
+
+          # Every tracked text file except the template's README, which is
+          # generated below and is the only file holding %%placeholders%%.
+          # The repository path goes first: replacing the bare project name
+          # first would leave nothing for "<org>/<project>" to match.
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              "$TEMPLATES_PATH"/* | README.md) continue ;;
+            esac
+            [ -f "$path" ] || continue
+            grep -qIF -e "$TEMPLATE_NAME" -e "$TEMPLATE_REPOSITORY" "$path" \
+              2>/dev/null || continue
+            sed -i -e "s|$TEMPLATE_REPOSITORY|$NEW_ORG/$NEW_PROJECT|g" \
+                   -e "s/$TEMPLATE_NAME/$NEW_SAFE_PROJECT/g" "$path"
+          done < <(git ls-files -z)
+
+          # Paths carrying the placeholder, the include directory above all.
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              "$TEMPLATES_PATH"/*) continue ;;
+            esac
+            target=$(printf '%s' "$path" | sed "s/$TEMPLATE_NAME/$NEW_SAFE_PROJECT/g")
+            [ "$path" = "$target" ] && continue
+            mkdir -p "$(dirname "$target")"
+            git mv "$path" "$target"
+          done < <(git ls-files -z | grep -z "$TEMPLATE_NAME" || true)
+
+          # The Pages commit in ci.yml is authored as this repository's owner
+          # rather than as the template's author.
+          sed -i \
+            -e "s|user_name: SnoutFirst|user_name: ${{ github.repository_owner }}|" \
+            -e "s|user_email: snoutfirst@protonmail.com|user_email: ${{ github.repository_owner }}@users.noreply.github.com|" \
+            .github/workflows/ci.yml
+
+      - name: Write the README for the new project
+        run: |
+          set -euo pipefail
+          sed -e "s/%%myorg%%/$NEW_ORG/g" \
+              -e "s/%%myproject%%/$NEW_PROJECT/g" \
+              -e "s/%%mysafeproject%%/$NEW_SAFE_PROJECT/g" \
+              -e "s|%%description%%|$NEW_SAFE_DESCRIPTION|g" \
+              "$TEMPLATES_PATH/README.md" > README.md
+          # A leftover placeholder would be published as literal text.
+          if grep -n '%%' README.md; then
+            echo "the generated README still has placeholders" >&2
+            exit 1
+          fi
+
+      - name: Remove the template machinery
+        run: |
+          rm -r "$TEMPLATES_PATH"
+          rm .github/workflows/template-janitor.yml
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: gcc-14
+
+          cmake: true
+          ninja: false
+          vcpkg: false
+          ccache: false
+          clangtidy: false
+          cppcheck: false
+
+          gcovr: false
+          opencppcoverage: false
+
+      - name: Build the renamed project
+        run: |
+          # Maintainer mode turns the sanitizers, clang-tidy, cppcheck and
+          # IPO/LTO off, exactly as a plain packaging build does, so this needs
+          # no extra tooling. It still compiles every target and every test.
+          cmake -S . -B build -G "Unix Makefiles" \
+            -DCMAKE_BUILD_TYPE:STRING=Debug \
+            -D"${NEW_SAFE_PROJECT}_PACKAGING_MAINTAINER_MODE:BOOL=ON"
+          cmake --build build --parallel 4
+
+      - uses: EndBug/add-and-commit@v11
+        # Only a repository generated from the template is set up: while this
+        # repository is still a template, everything above was a dry run.
+        if: fromJson(steps.get_repo_meta.outputs.data).is_template != true
+        with:
+          add: -A
+          author_name: Template Janitor
+          author_email: template.janitor@example.com
+          message: Cleanup template and initialize repository
+          pathspec_error_handling: exitImmediately
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
