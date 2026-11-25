@@ -43,7 +43,7 @@ function(_assert_disabled var_name)
   endif()
 endfunction()
 
-_assert_disabled("myproject_ENABLE_CPPCHECK")
-_assert_disabled("myproject_ENABLE_CLANG_TIDY")
+_assert_disabled("cmake_template_nowasm_ENABLE_CPPCHECK")
+_assert_disabled("cmake_template_nowasm_ENABLE_CLANG_TIDY")
 
 message(STATUS "conf-windows-common correctly disables cppcheck and clang-tidy")
