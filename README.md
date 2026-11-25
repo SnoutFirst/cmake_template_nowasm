@@ -174,3 +174,8 @@ The placeholder names it looks for are in `.github/template/template_name` and
 repository. Nothing else needs renaming by hand; `grep -rl
 cmake_template_nowasm .` finds every occurrence if you would rather do it
 yourself.
+
+One caveat: the cleanup commit is pushed with the repository's own
+`GITHUB_TOKEN`, and a push made with that token does not start another workflow
+run. The first `ci` run still describes the un-renamed template, so the release
+assets and the download page catch up on your next push to `main`.
