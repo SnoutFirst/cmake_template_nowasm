@@ -1,81 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>myproject - WebAssembly Applications</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css" id="theme-stylesheet">
-    <style>
-        body { max-width: 900px; }
-        header { text-align: center; }
-        footer { text-align: center; margin-top: 3rem; }
-        fieldset { text-align: center; border: none; }
-        .app-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin: 2rem 0;
-        }
-        .app-card {
-            padding: 1.5rem;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            text-decoration: none;
-            display: block;
-        }
-        .app-card:hover {
-            border-color: var(--links);
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cmake_template_nowasm downloads</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 46rem;
+    background: #111; color: #e8e8e8;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 1.7rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  p.lead { color: #a8a8a8; margin-top: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 1.75rem 0 1rem; }
+  th, td { text-align: left; padding: .7rem .5rem; border-bottom: 1px solid #2a2a2a;
+            vertical-align: top; }
+  th { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: #9a9a9a; }
+  a { color: #7fc8ff; }
+  .file { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem;
+           color: #cfcfcf; word-break: break-all; }
+  .note { color: #9a9a9a; font-size: .88rem; }
+  h2 { font-size: 1.15rem; margin: 2.5rem 0 .5rem; letter-spacing: -.01em; }
+  ul { padding-left: 1.25rem; margin: .5rem 0; }
+  li { margin: .3rem 0; }
+  strong { color: #fff; }
+  code, kbd { background: #1c1c1c; padding: .1rem .3rem; border-radius: 4px; }
+  kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+         font-size: .85em; color: #e8e8e8; border: 1px solid #333; }
+  pre { background: #1c1c1c; padding: .8rem 1rem; border-radius: 6px;
+         overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  img { max-width: 100%; height: auto; }
+  hr { border: 0; border-top: 1px solid #2a2a2a; margin: 2rem 0; }
+  footer { margin-top: 2.5rem; color: #7d7d7d; font-size: .85rem; }
+</style>
 </head>
 <body>
-    <main>
-        <fieldset>
-            <label><input type="radio" name="theme" value="auto" checked> Auto</label>
-            <label><input type="radio" name="theme" value="light"> Light</label>
-            <label><input type="radio" name="theme" value="dark"> Dark</label>
-        </fieldset>
+<h1>cmake_template_nowasm</h1>
+<p class="lead">A WASM-free variant of
+<a href="https://github.com/cpp-best-practices/cmake_template">cpp-best-practices/cmake_template</a>:
+a minimal C++23 hello-world CLI with the template's build system, tests and
+developer tooling. <a href="https://github.com/SnoutFirst/cmake_template_nowasm">Source code</a>.</p>
 
-        <header>
-            <h1>myproject</h1>
-            <p>WebAssembly Applications</p>
-        </header>
+<table>
+  <tr><th>Platform</th><th>Download</th><th>Notes</th></tr>
+  <tr><td><strong>macOS</strong><br><span class="note">arm64</span></td><td><a class="file" href="https://github.com/SnoutFirst/cmake_template_nowasm/releases/download/ci-latest/cmake_template_nowasm-macos-arm64.zip">cmake_template_nowasm-macos-arm64.zip</a><br><span class="note">285.5 KiB</span></td><td class="note">Unpack the .zip and run the binary. It is unsigned, so the first launch needs right-click → Open (or <code>xattr -dr com.apple.quarantine cmake_template_nowasm</code>).</td></tr>
+  <tr><td><strong>Linux</strong><br><span class="note">x86_64</span></td><td><a class="file" href="https://github.com/SnoutFirst/cmake_template_nowasm/releases/download/ci-latest/cmake_template_nowasm-linux-x86_64.tar.gz">cmake_template_nowasm-linux-x86_64.tar.gz</a><br><span class="note">284.4 KiB</span></td><td class="note">Unpack the .tar.gz and run the binary; nothing needs to be installed.</td></tr>
+</table>
 
-        <div class="app-grid">
-                        <a href="intro/" class="app-card">
-                <h3>Intro - FTXUI Sample</h3>
-                <p>FTXUI-based terminal application</p>
-            </a>
+<h2>What it does</h2>
+<pre><code>$ cmake_template_nowasm --name you
+Hello, you!</code></pre>
+<p>It is deliberately tiny: the point of the template is the <em>surroundings</em>, not the program. <code>--help</code> and a <code>--version</code> that matches what CMake was told are covered by the tests, which also keeps the CLI parsing (CLI11) and the configured <code>config.hpp</code> exercised.</p>
+<h2>What is inherited from upstream</h2>
+<ul>
+  <li>CMake ≥ 3.29, C++23, and the <code>cmake_template_nowasm_*</code> option namespace.</li>
+  <li>Sanitizers (ASan/UBSan on by default where supported), hardening (<code>_FORTIFY_SOURCE</code>, stack protector, CFI on MSVC), warnings-as-errors, clang-tidy and cppcheck, IPO/LTO.</li>
+  <li>CPM-fetched dependencies: fmt, spdlog, Catch2 and CLI11. A parent project can supply its own versions; every fetch is guarded by <code>if(NOT TARGET ...)</code>.</li>
+  <li>Catch2 unit tests and constexpr tests, a libFuzzer harness that switches on when a fuzzing sanitizer is available, coverage collection with gcovr / OpenCppCoverage, and CPack packages whose names embed the compiler and the commit sha.</li>
+  <li>The GitHub Actions matrix (Linux/macOS/Windows × GCC/Clang/MSVC × Debug/Release, Ninja Multi-Config plus one plain Makefiles and four Visual Studio builds), CodeQL, the clang-format bot, Dependabot and the dev container.</li>
+</ul>
+<h2>What was changed</h2>
+<ul>
+  <li><strong>WebAssembly removed.</strong> <code>cmake/Emscripten.cmake</code>, the <code>web/</code> assets, the <code>EMSCRIPTEN</code> branches in the options and the "Build Intro WASM and Deploy to GitHub Pages" workflow are gone. Nothing conditional is left behind: the native build is the only build.</li>
+  <li><strong>The example application replaced.</strong> The FTXUI game (<code>intro</code>) became a hello-world CLI named after the project. FTXUI and lefticus/tools, which only the game used, are no longer fetched.</li>
+  <li><strong>Downloads published.</strong> CI packages one Release binary per platform, uploads it as a workflow artifact, attaches the archives to a rolling <code>ci-latest</code> release and publishes a download page to GitHub Pages — the same mechanism used by <a href="https://github.com/SnoutFirst/QtWatchAllVideos">QtWatchAllVideos</a>.</li>
+  <li><strong>Two fixes the upstream generation step left behind.</strong> <code>CMakePresets.json</code> still named its analyzer options <code>myproject_*</code>, so the Windows presets disabled nothing and <code>presets.windows_disables_static_analysis</code> failed; and the <code>factorial</code> declaration did not name its parameter, which modern cppcheck rejects (this failed every macOS job).</li>
+</ul>
 
-        </div>
-
-        <footer>
-            <small>Built with CMake and Emscripten | Version 0.0.2</small>
-        </footer>
-    </main>
-
-    <script>
-        const themeStylesheet = document.getElementById('theme-stylesheet');
-        const themeRadios = document.querySelectorAll('input[name="theme"]');
-        const themes = {
-            auto: 'https://cdn.jsdelivr.net/npm/water.css@2/out/water.min.css',
-            light: 'https://cdn.jsdelivr.net/npm/water.css@2/out/light.min.css',
-            dark: 'https://cdn.jsdelivr.net/npm/water.css@2/out/dark.min.css'
-        };
-
-        // Load saved theme preference
-        const savedTheme = localStorage.getItem('theme') || 'auto';
-        themeStylesheet.href = themes[savedTheme];
-        document.querySelector(`input[value="${savedTheme}"]`).checked = true;
-
-        // Handle theme changes
-        themeRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                const theme = e.target.value;
-                themeStylesheet.href = themes[theme];
-                localStorage.setItem('theme', theme);
-            });
-        });
-    </script>
+<footer>
+  Built from <code>main</code> at commit <code>eec1fc8</code> by GitHub Actions.
+  The archives are attached to the
+  <a href="https://github.com/SnoutFirst/cmake_template_nowasm/releases/tag/ci-latest">rolling CI release</a>
+  so that no build output is ever committed. Older builds are kept as workflow
+  artifacts, and tagged versions also get a GitHub Release each.
+</footer>
 </body>
 </html>
