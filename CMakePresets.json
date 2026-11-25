@@ -33,8 +33,8 @@
                 "strategy": "external"
             },
             "cacheVariables": {
-                "myproject_ENABLE_CPPCHECK": "FALSE",
-                "myproject_ENABLE_CLANG_TIDY": "FALSE"
+                "cmake_template_nowasm_ENABLE_CPPCHECK": "FALSE",
+                "cmake_template_nowasm_ENABLE_CLANG_TIDY": "FALSE"
             }
         },
         {
