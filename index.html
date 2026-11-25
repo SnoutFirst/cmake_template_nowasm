@@ -51,27 +51,51 @@ developer tooling. <a href="https://github.com/SnoutFirst/cmake_template_nowasm"
 </table>
 
 <h2>What it does</h2>
-<pre><code>$ cmake_template_nowasm --name you
-Hello, you!</code></pre>
-<p>It is deliberately tiny: the point of the template is the <em>surroundings</em>, not the program. <code>--help</code> and a <code>--version</code> that matches what CMake was told are covered by the tests, which also keeps the CLI parsing (CLI11) and the configured <code>config.hpp</code> exercised.</p>
+<pre><code class="language-sh">$ cmake_template_nowasm --name you
+Hello, you!
+</code></pre>
+<p>It is deliberately tiny: the point of the template is the <em>surroundings</em>, not
+the program. <code>--help</code> and a <code>--version</code> that matches what CMake was told are
+covered by the tests, which also keeps the CLI parsing (CLI11) and the
+configured <code>config.hpp</code> exercised.</p>
 <h2>What is inherited from upstream</h2>
 <ul>
-  <li>CMake ≥ 3.29, C++23, and the <code>cmake_template_nowasm_*</code> option namespace.</li>
-  <li>Sanitizers (ASan/UBSan on by default where supported), hardening (<code>_FORTIFY_SOURCE</code>, stack protector, CFI on MSVC), warnings-as-errors, clang-tidy and cppcheck, IPO/LTO.</li>
-  <li>CPM-fetched dependencies: fmt, spdlog, Catch2 and CLI11. A parent project can supply its own versions; every fetch is guarded by <code>if(NOT TARGET ...)</code>.</li>
-  <li>Catch2 unit tests and constexpr tests, a libFuzzer harness that switches on when a fuzzing sanitizer is available, coverage collection with gcovr / OpenCppCoverage, and CPack packages whose names embed the compiler and the commit sha.</li>
-  <li>The GitHub Actions matrix (Linux/macOS/Windows × GCC/Clang/MSVC × Debug/Release, Ninja Multi-Config plus one plain Makefiles and four Visual Studio builds), CodeQL, the clang-format bot, Dependabot and the dev container.</li>
+<li>CMake ≥ 3.29, C++23, and the <code>cmake_template_nowasm_*</code> option namespace.</li>
+<li>Sanitizers (ASan/UBSan on by default where supported), hardening
+(<code>_FORTIFY_SOURCE</code>, stack protector, CFI on MSVC), warnings-as-errors,
+clang-tidy and cppcheck, IPO/LTO.</li>
+<li>CPM-fetched dependencies: fmt, spdlog, Catch2 and CLI11. A parent project can
+supply its own versions; every fetch is guarded by <code>if(NOT TARGET ...)</code>.</li>
+<li>Catch2 unit tests and constexpr tests, a libFuzzer harness that switches on
+when a fuzzing sanitizer is available, coverage collection with gcovr /
+OpenCppCoverage, and CPack packages whose names embed the compiler and the
+commit sha.</li>
+<li>The GitHub Actions matrix (Linux/macOS/Windows × GCC/Clang/MSVC × Debug/Release,
+Ninja Multi-Config plus one plain Makefiles and four Visual Studio builds),
+CodeQL, the clang-format bot, Dependabot and the dev container.</li>
 </ul>
 <h2>What was changed</h2>
 <ul>
-  <li><strong>WebAssembly removed.</strong> <code>cmake/Emscripten.cmake</code>, the <code>web/</code> assets, the <code>EMSCRIPTEN</code> branches in the options and the "Build Intro WASM and Deploy to GitHub Pages" workflow are gone. Nothing conditional is left behind: the native build is the only build.</li>
-  <li><strong>The example application replaced.</strong> The FTXUI game (<code>intro</code>) became a hello-world CLI named after the project. FTXUI and lefticus/tools, which only the game used, are no longer fetched.</li>
-  <li><strong>Downloads published.</strong> CI packages one Release binary per platform, uploads it as a workflow artifact, attaches the archives to a rolling <code>ci-latest</code> release and publishes a download page to GitHub Pages — the same mechanism used by <a href="https://github.com/SnoutFirst/QtWatchAllVideos">QtWatchAllVideos</a>.</li>
-  <li><strong>Two fixes the upstream generation step left behind.</strong> <code>CMakePresets.json</code> still named its analyzer options <code>myproject_*</code>, so the Windows presets disabled nothing and <code>presets.windows_disables_static_analysis</code> failed; and the <code>factorial</code> declaration did not name its parameter, which modern cppcheck rejects (this failed every macOS job).</li>
+<li><strong>WebAssembly removed.</strong> <code>cmake/Emscripten.cmake</code>, the <code>web/</code> assets, the
+<code>EMSCRIPTEN</code> branches in the options and the &quot;Build Intro WASM and Deploy to
+GitHub Pages&quot; workflow are gone. Nothing conditional is left behind: the
+native build is the only build.</li>
+<li><strong>The example application replaced.</strong> The FTXUI game (<code>intro</code>) became a
+hello-world CLI named after the project. FTXUI and lefticus/tools, which only
+the game used, are no longer fetched.</li>
+<li><strong>Downloads published.</strong> CI packages one Release binary per platform, uploads
+it as a workflow artifact, attaches the archives to a rolling <code>ci-latest</code>
+release and publishes a download page to GitHub Pages — the same mechanism
+used by <a href="https://github.com/SnoutFirst/QtWatchAllVideos">QtWatchAllVideos</a>.</li>
+<li><strong>Two fixes the upstream generation step left behind.</strong> <code>CMakePresets.json</code>
+still named its analyzer options <code>myproject_*</code>, so the Windows presets
+disabled nothing and <code>presets.windows_disables_static_analysis</code> failed; and
+the <code>factorial</code> declaration did not name its parameter, which modern cppcheck
+rejects (this failed every macOS job).</li>
 </ul>
 
 <footer>
-  Built from <code>main</code> at commit <code>665950e</code> by GitHub Actions.
+  Built from <code>main</code> at commit <code>f7e7dbc</code> by GitHub Actions.
   The archives are attached to the
   <a href="https://github.com/SnoutFirst/cmake_template_nowasm/releases/tag/ci-latest">rolling CI release</a>
   so that no build output is ever committed. Older builds are kept as workflow
