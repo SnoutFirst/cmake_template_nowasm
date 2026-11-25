@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""Build the GitHub Pages index for the packaged cmake_template_nowasm binaries.
+
+Usage: make_download_page.py <artifact-dir> <site-dir> <commit-sha> <ref-name>
+                            [readme-section.html]
+
+The archives live as assets of the rolling "ci-latest" GitHub Release rather than
+on the Pages branch itself: keeping them out of git means the published site
+stays a few kilobytes and the repository never accumulates build output. This
+page only links to them.
+
+Artifact names look like
+
+    cmake_template_nowasm-1a2b3c4-linux-x86_64.tar.gz
+    cmake_template_nowasm-1a2b3c4-macos-arm64.zip
+    cmake_template_nowasm-1a2b3c4-windows-x64.zip
+
+(the "-<sha>" part is stripped before the release upload, so the download URLs
+are stable across builds).
+
+The optional readme-section.html argument is the fragment produced by
+make_readme_section.py from the delimited part of README.md; it is pasted below
+the download table so the page and the README cannot drift apart.
+"""
+
+from __future__ import annotations
+
+import html
+import os
+import sys
+from pathlib import Path
+
+# GitHub Actions sets GITHUB_REPOSITORY; the literal is only a fallback for a
+# manual run, so renaming the repository does not need a code change.
+REPO = os.environ.get("GITHUB_REPOSITORY") or "SnoutFirst/cmake_template_nowasm"
+RELEASE_TAG = "ci-latest"
+PROJECT = "cmake_template_nowasm"
+
+PLATFORM_ORDER = {"windows": 0, "macos": 1, "linux": 2}
+PLATFORM_LABEL = {"windows": "Windows", "macos": "macOS", "linux": "Linux"}
+PLATFORM_NOTE = {
+    "windows": "Unpack the .zip anywhere and run cmake_template_nowasm.exe.",
+    "macos": "Unpack the .zip and run the binary. It is unsigned, so the first "
+    "launch needs right-click \u2192 Open "
+    "(or <code>xattr -dr com.apple.quarantine cmake_template_nowasm</code>).",
+    "linux": "Unpack the .tar.gz and run the binary; nothing needs to be installed.",
+}
+
+PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cmake_template_nowasm downloads</title>
+<style>
+  :root {{ color-scheme: dark; }}
+  body {{
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 46rem;
+    background: #111; color: #e8e8e8;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }}
+  h1 {{ font-size: 1.7rem; margin: 0 0 .25rem; letter-spacing: -.01em; }}
+  p.lead {{ color: #a8a8a8; margin-top: 0; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 1.75rem 0 1rem; }}
+  th, td {{ text-align: left; padding: .7rem .5rem; border-bottom: 1px solid #2a2a2a;
+            vertical-align: top; }}
+  th {{ font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: #9a9a9a; }}
+  a {{ color: #7fc8ff; }}
+  .file {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem;
+           color: #cfcfcf; word-break: break-all; }}
+  .note {{ color: #9a9a9a; font-size: .88rem; }}
+  h2 {{ font-size: 1.15rem; margin: 2.5rem 0 .5rem; letter-spacing: -.01em; }}
+  ul {{ padding-left: 1.25rem; margin: .5rem 0; }}
+  li {{ margin: .3rem 0; }}
+  strong {{ color: #fff; }}
+  code, kbd {{ background: #1c1c1c; padding: .1rem .3rem; border-radius: 4px; }}
+  kbd {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+         font-size: .85em; color: #e8e8e8; border: 1px solid #333; }}
+  pre {{ background: #1c1c1c; padding: .8rem 1rem; border-radius: 6px;
+         overflow-x: auto; }}
+  pre code {{ background: none; padding: 0; }}
+  img {{ max-width: 100%; height: auto; }}
+  hr {{ border: 0; border-top: 1px solid #2a2a2a; margin: 2rem 0; }}
+  footer {{ margin-top: 2.5rem; color: #7d7d7d; font-size: .85rem; }}
+</style>
+</head>
+<body>
+<h1>cmake_template_nowasm</h1>
+<p class="lead">A WASM-free variant of
+<a href="https://github.com/cpp-best-practices/cmake_template">cpp-best-practices/cmake_template</a>:
+a minimal C++23 hello-world CLI with the template's build system, tests and
+developer tooling. <a href="https://github.com/{repo}">Source code</a>.</p>
+
+{body}
+{readme}
+<footer>
+  Built from <code>{ref}</code> at commit <code>{sha}</code> by GitHub Actions.
+  The archives are attached to the
+  <a href="https://github.com/{repo}/releases/tag/{tag}">rolling CI release</a>
+  so that no build output is ever committed. Older builds are kept as workflow
+  artifacts, and tagged versions also get a GitHub Release each.
+</footer>
+</body>
+</html>
+"""
+
+
+def human_size(num: int) -> str:
+    value = float(num)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if value < 1024 or unit == "GiB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GiB"
+
+
+def split_name(name: str) -> tuple[str, str]:
+    """Return (platform, arch) for an artifact name, or ("", "") if unknown."""
+    stem = name
+    for suffix in (".tar.gz", ".tar.bz2", ".tgz", ".zip"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    else:
+        stem = stem.rsplit(".", 1)[0]
+    parts = stem.split("-")
+    for index, part in enumerate(parts):
+        if part in PLATFORM_ORDER:
+            arch = parts[index + 1] if index + 1 < len(parts) else ""
+            return part, arch
+    return "", ""
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) not in (5, 6):
+        print(__doc__, file=sys.stderr)
+        return 2
+
+    artifact_dir, site_dir = Path(argv[1]), Path(argv[2])
+    sha, ref = argv[3], argv[4]
+
+    readme = ""
+    if len(argv) == 6:
+        try:
+            readme = Path(argv[5]).read_text(encoding="utf-8").strip()
+        except OSError as error:
+            print(f"cannot read the README section: {error}", file=sys.stderr)
+            return 1
+        if not readme:
+            print(f"{argv[5]} is empty", file=sys.stderr)
+            return 1
+        readme = f"\n{readme}\n"
+
+    files = sorted(p for p in artifact_dir.rglob("*") if p.is_file())
+    if not files:
+        print(f"no artifacts found in {artifact_dir}", file=sys.stderr)
+        return 1
+
+    rows = []
+    for path in files:
+        platform, arch = split_name(path.name)
+        if not platform:
+            print(f"skipping unrecognised artifact {path.name}", file=sys.stderr)
+            continue
+        rows.append((PLATFORM_ORDER[platform], platform, arch, path))
+
+    if not rows:
+        print("no recognised artifacts to publish", file=sys.stderr)
+        return 1
+
+    rows.sort(key=lambda row: row[0])
+    download_base = f"https://github.com/{REPO}/releases/download/{RELEASE_TAG}"
+    table_rows = "\n".join(
+        "  <tr><td><strong>{label}</strong><br><span class=\"note\">{arch}</span></td>"
+        "<td><a class=\"file\" href=\"{url}\">{name}</a><br>"
+        "<span class=\"note\">{size}</span></td>"
+        "<td class=\"note\">{note}</td></tr>".format(
+            label=PLATFORM_LABEL[platform],
+            arch=html.escape(arch),
+            url=html.escape(f"{download_base}/{path.name}"),
+            name=html.escape(path.name),
+            size=human_size(path.stat().st_size),
+            note=PLATFORM_NOTE[platform],
+        )
+        for _, platform, arch, path in rows
+    )
+
+    body = (
+        "<table>\n"
+        "  <tr><th>Platform</th><th>Download</th><th>Notes</th></tr>\n"
+        f"{table_rows}\n"
+        "</table>"
+    )
+
+    site_dir.mkdir(parents=True, exist_ok=True)
+    (site_dir / "index.html").write_text(
+        PAGE.format(
+            body=body,
+            readme=readme,
+            ref=html.escape(ref),
+            sha=html.escape(sha[:7]),
+            repo=REPO,
+            tag=RELEASE_TAG,
+        ),
+        encoding="utf-8",
+    )
+    print(f"wrote {site_dir / 'index.html'} with {len(rows)} download(s)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

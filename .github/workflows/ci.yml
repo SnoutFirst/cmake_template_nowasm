@@ -18,6 +18,11 @@ jobs:
   Test:
     name: ${{matrix.os}} ${{matrix.compiler}} ${{matrix.build_type}} ${{matrix.packaging_maintainer_mode == 'ON' && '(maintainer mode)' || ''}}
     runs-on: ${{ matrix.os }}
+    env:
+      # Only used by the "Publish to codecov" step, which is skipped unless a
+      # token is configured: without one Codecov rejects the upload and fails
+      # an otherwise green build.
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     strategy:
       fail-fast: false
 
@@ -30,9 +35,12 @@ jobs:
       # and your own projects needs
       matrix:
         os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+          # Pinned rather than *-latest: the toolchains below are installed per
+          # image, and windows-latest no longer provides the "Visual Studio 17
+          # 2022" generator that the msvc jobs configure with.
+          - ubuntu-24.04
+          - macos-14
+          - windows-2022
         compiler:
           # you can specify the version after `-` like "llvm-15.0.2".
           - llvm-19.1.1
@@ -50,7 +58,7 @@ jobs:
 
         exclude:
           # mingw is determined by this author to be too buggy to support
-          - os: windows-latest
+          - os: windows-2022
             compiler: gcc-14
 
         include:
@@ -64,7 +72,7 @@ jobs:
             enable_ipo: Off
             gcov_executable: "llvm-cov gcov"
 
-          - os: macos-latest
+          - os: macos-14
             enable_ipo: Off
 
           # Set up preferred package generators, for given build configurations
@@ -72,8 +80,35 @@ jobs:
             packaging_maintainer_mode: On
             package_generator: TBZ2
 
+          # Exactly one Release build per platform is packaged and published
+          # (the "Package" steps feed the pages job). The explicit build_shared
+          # value keeps the entry matching a single matrix combination.
+          - os: ubuntu-24.04
+            compiler: gcc-14
+            generator: "Ninja Multi-Config"
+            build_type: Release
+            packaging_maintainer_mode: ON
+            build_shared: OFF
+            package: true
+
+          - os: macos-14
+            compiler: llvm-19.1.1
+            generator: "Ninja Multi-Config"
+            build_type: Release
+            packaging_maintainer_mode: ON
+            build_shared: OFF
+            package: true
+
+          - os: windows-2022
+            compiler: msvc
+            generator: "Visual Studio 17 2022"
+            build_type: Release
+            packaging_maintainer_mode: ON
+            build_shared: OFF
+            package: true
+
           # This exists solely to make sure a non-multiconfig build works
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             compiler: gcc-14
             generator: "Unix Makefiles"
             build_type: Debug
@@ -82,34 +117,34 @@ jobs:
             enable_ipo: Off
 
           # Windows msvc builds
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Debug
             packaging_maintainer_mode: On
             enable_ipo: On
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Release
             packaging_maintainer_mode: On
             enable_ipo: On
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Debug
             packaging_maintainer_mode: Off
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Release
             packaging_maintainer_mode: Off
             package_generator: ZIP
 
-          - os: windows-latest
+          - os: windows-2022
             compiler: msvc
             generator: "Visual Studio 17 2022"
             build_type: Release
@@ -190,6 +225,56 @@ jobs:
         run: |
           cpack -C ${{matrix.build_type}} -G ${{matrix.package_generator}}
 
+      # ---- package (the archives the download page links to) ----
+      #
+      # They are uploaded as workflow artifacts and attached to the rolling
+      # "ci-latest" Release by the pages job: never committed to the repository.
+
+      - name: Package (Linux tarball)
+        if: matrix.package && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse --short=7 HEAD)
+          tar -czf "cmake_template_nowasm-${sha}-linux-x86_64.tar.gz" \
+            -C "build/src/app/${{ matrix.build_type }}" cmake_template_nowasm
+
+      - name: Package (macOS archive)
+        if: matrix.package && runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse --short=7 HEAD)
+          ditto -c -k --sequesterRsrc \
+            "build/src/app/${{ matrix.build_type }}/cmake_template_nowasm" \
+            "cmake_template_nowasm-${sha}-macos-$(uname -m).zip"
+
+      - name: Package (Windows archive)
+        if: matrix.package && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = "build/src/app/${{ matrix.build_type }}"
+          $sha = git rev-parse --short=7 HEAD
+          # A Release build links the dynamic C runtime, so put the matching
+          # redistributable DLLs next to the executable (the windeployqt
+          # equivalent for a plain executable).
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -property installationPath
+          $crt = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory |
+            Sort-Object Name | Select-Object -Last 1
+          Copy-Item "$($crt.FullName)\*.dll" $out
+          Compress-Archive -Path "$out/*" -DestinationPath "cmake_template_nowasm-$sha-windows-x64.zip"
+
+      - name: Upload packaged binary
+        if: matrix.package
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ runner.os }}
+          path: |
+            cmake_template_nowasm-*.tar.gz
+            cmake_template_nowasm-*.zip
+          if-no-files-found: error
+
       - name: Publish Tagged Release
         uses: softprops/action-gh-release@v3
         if: ${{ startsWith(github.ref, 'refs/tags/') && matrix.package_generator != '' }}
@@ -199,6 +284,7 @@ jobs:
 
 
       - name: Publish to codecov
+        if: env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v7
         with:
           fail_ci_if_error: true # we weren't posting previously
@@ -206,3 +292,99 @@ jobs:
           name: ${{ runner.os }}-coverage
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./build/coverage.xml
+
+  # ---- publish ----
+
+  pages:
+    name: Publish downloads page and rolling CI release
+    needs: Test
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download packaged binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          path: downloads
+          merge-multiple: true
+
+      # The commit sha is dropped from the published names so that
+      # releases/download/ci-latest/cmake_template_nowasm-linux-x86_64.tar.gz
+      # stays a stable link; the page shows which commit it was built from.
+      - name: Give the archives stable names
+        run: |
+          python3 - <<'STABLE'
+          import re
+          from pathlib import Path
+
+          for path in sorted(Path("downloads").iterdir()):
+              if path.is_file():
+                  stable = re.sub(r"-[0-9a-f]{7}(?=-)", "", path.name)
+                  if stable != path.name:
+                      path.rename(path.with_name(stable))
+                      print(f"{path.name} -> {stable}")
+          STABLE
+
+      - name: Update the rolling CI release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ci-latest
+          name: Latest CI build
+          body: |
+            Automatically published from the latest successful build of `main`
+            (commit ${{ github.sha }}).
+
+            The download page lives at
+            https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          files: downloads/*
+          prerelease: true
+          make_latest: "false"
+
+      # README.md is the source of truth for the prose on the page: the part
+      # between the github-pages markers is rendered to HTML first, then the
+      # download table is built around it. The fragment lives outside site/ so
+      # that it is not published as a stray file.
+      - name: Render the README section of the site
+        run: python3 .github/scripts/make_readme_section.py README.md site-parts/readme.html
+
+      - name: Generate the download page
+        run: >-
+          python3 .github/scripts/make_download_page.py downloads site
+          "${{ github.sha }}" "${{ github.ref_name }}" site-parts/readme.html
+
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          # Commit on top of the existing gh-pages branch instead of replacing
+          # it with a fresh orphan commit: a forced rewrite makes every mirror
+          # of this repository report a diverged branch.
+          keep_history: true
+          user_name: SnoutFirst
+          user_email: snoutfirst@protonmail.com
+
+  release-assets:
+    name: Attach binaries to the GitHub Release
+    needs: Test
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download packaged binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          path: downloads
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: downloads/*
