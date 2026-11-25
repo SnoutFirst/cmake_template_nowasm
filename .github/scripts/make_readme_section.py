@@ -14,18 +14,13 @@ the page shell (title, styling, download table, footer). Both delimiters are
 required, exactly once, start before end, and the section must not be empty: a
 missing or mangled marker is a build failure, not a quietly shorter page.
 
-Markdown handling is deliberately small and *safe*: README content is data,
-never trusted markup. Every character is HTML-escaped and only the constructs
-below are interpreted, so an accidental `<script>` in the README shows up as
-text instead of running on the site.
-
-    headings, fenced code blocks, paragraphs, horizontal rules,
-    unordered lists (nested), code spans, **strong**, *em*,
-    [links](url), <autolinks>, ![images](src)
-
-The single exception to "no raw HTML" is INLINE_TAGS: a fixed allowlist of
-tags that are passed through as markup (<kbd>…</kbd> and <br>), for README
-text that needs them and would be unreadable if escaped.
+Markdown is parsed by markdown-it-py (CommonMark preset) rather than by hand,
+with the GFM table and strikethrough rules switched on because README text uses
+them. Raw HTML stays disabled: README content is data, never trusted markup, so
+an accidental `<script>` is rendered as text instead of running on the site.
+URLs are restricted to links that cannot execute anything -- http, https,
+mailto, ftp, or no scheme at all, which covers relative paths and #anchors --
+so `javascript:`, `data:`, `vbscript:` and friends never reach an attribute.
 
 Relative links and images cannot resolve on the published site (only the
 generated index.html is published, no sources are), so they are rewritten to
@@ -34,41 +29,57 @@ the repository on GitHub. Set GITHUB_REPOSITORY to override the fallback.
 
 from __future__ import annotations
 
-import html
 import os
 import re
 import sys
 from pathlib import Path
+
+from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 START = "<!-- github-pages:start -->"
 END = "<!-- github-pages:end -->"
 
 REPO = os.environ.get("GITHUB_REPOSITORY") or "SnoutFirst/cmake_template_nowasm"
 
-# Inline tags copied verbatim into the output (their *contents* stay escaped).
-INLINE_TAGS = ("kbd", "br")
+#: Schemes a README link may use. Everything else -- including data:, file:,
+#: javascript: and vbscript: -- is refused, so the list is an allowlist rather
+#: than a denylist of currently fashionable attacks.
+ALLOWED_SCHEMES = frozenset({"http", "https", "mailto", "ftp"})
 
-_ESCAPES = {"&": "&amp;", "<": "&lt;", ">": "&gt;"}
+_SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.\-]*):")
+
+#: Browsers ignore ASCII whitespace and control characters inside a scheme
+#: ("java\tscript:" still runs), so they are dropped before it is looked for.
+_IGNORED_IN_URL = re.compile(r"[\x00-\x20\x7f]+")
 
 
 class SectionError(Exception):
     """The README does not delimit its GitHub Pages section correctly."""
 
 
-def _escape(text: str) -> str:
-    return "".join(_ESCAPES.get(char, char) for char in text)
-
-
 def _marker_lines(text: str, marker: str) -> list[int]:
-    return [number for number, line in enumerate(text.splitlines(), 1) if marker in line]
+    return [
+        number for number, line in enumerate(text.splitlines(), 1) if marker in line
+    ]
 
 
-# --- inline rendering -------------------------------------------------------
+# --- link and image URLs ----------------------------------------------------
+
+
+def _is_allowed_url(url: str) -> bool:
+    """True for a scheme relative URL or for one of ALLOWED_SCHEMES."""
+    match = _SCHEME.match(_IGNORED_IN_URL.sub("", url))
+    return match is None or match.group(1).lower() in ALLOWED_SCHEMES
 
 
 def _resolve(url: str, *, image: bool = False) -> str:
     """Point a relative README URL at GitHub, pass absolute ones through."""
-    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", url) or url.startswith(("#", "/")):
+    if not _is_allowed_url(url):
+        # The parser refuses these before they become tokens, so this is only
+        # a second line of defence: neutralize rather than take a chance.
+        return "#"
+    if _SCHEME.match(url) or url.startswith(("#", "/")):
         return url
     path = url.lstrip("./") or url
     if image:
@@ -76,172 +87,39 @@ def _resolve(url: str, *, image: bool = False) -> str:
     return f"https://github.com/{REPO}/blob/HEAD/{path}"
 
 
-def render_inline(text: str) -> str:
-    """Convert one run of Markdown inline syntax to escaped HTML."""
-    stash: list[str] = []
+def _rewrite_urls(tokens: list[Token]) -> None:
+    """Resolve every href/src in place, before the tokens are rendered."""
+    for token in tokens:
+        if token.type == "link_open":
+            token.attrSet("href", _resolve(token.attrGet("href") or ""))
+        elif token.type == "image":
+            token.attrSet("src", _resolve(token.attrGet("src") or "", image=True))
+            token.attrSet("loading", "lazy")
+        if token.children:
+            _rewrite_urls(token.children)
 
-    def keep(fragment: str) -> str:
-        stash.append(fragment)
-        return f"\x00{len(stash) - 1}\x00"
 
-    # Code spans first: their content is literal, so nothing else may touch it.
-    def code(match: re.Match[str]) -> str:
-        return keep(f"<code>{_escape(match.group(1))}</code>")
-
-    text = re.sub(r"`([^`\n]+)`", code, text)
-
-    # Autolinks and the pass-through allowlist, both before escaping.
-    def autolink(match: re.Match[str]) -> str:
-        url = match.group(1)
-        return keep(f'<a href="{html.escape(url, quote=True)}">{_escape(url)}</a>')
-
-    text = re.sub(r"<((?:https?|ftp)://[^>\s]+)>", autolink, text)
-    text = re.sub(
-        r"</?(?:%s)\s*/?>" % "|".join(INLINE_TAGS), lambda m: keep(m.group(0)), text
+def _new_parser() -> MarkdownIt:
+    parser = MarkdownIt(
+        "commonmark",
+        # HTML5 output (no XHTML-style trailing slashes), raw HTML escaped,
+        # no autolinking or typographic substitutions behind our back.
+        {"html": False, "xhtmlOut": False, "linkify": False, "typographer": False},
     )
-
-    text = _escape(text)
-
-    # Images before links: "![alt](src)" also looks like "[alt](src)".
-    def image(match: re.Match[str]) -> str:
-        url = _resolve(html.unescape(match.group(2)), image=True)
-        return keep(
-            f'<img src="{html.escape(url, quote=True)}" '
-            f'alt="{html.escape(html.unescape(match.group(1)), quote=True)}" loading="lazy">'
-        )
-
-    def link(match: re.Match[str]) -> str:
-        url = _resolve(html.unescape(match.group(2)))
-        return keep(
-            f'<a href="{html.escape(url, quote=True)}">{match.group(1)}</a>'
-        )
-
-    text = re.sub(r"!\[([^\]]*)\]\(([^)\s]+)\)", image, text)
-    text = re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, text)
-
-    text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
-
-    # Restore in reverse so nested stashes (a link label holding a code span)
-    # resolve in one pass.
-    while "\x00" in text:
-        text = re.sub(r"\x00(\d+)\x00", lambda m: stash[int(m.group(1))], text)
-    return text
+    parser.enable("table")
+    parser.enable("strikethrough")
+    parser.validateLink = _is_allowed_url
+    return parser
 
 
-# --- block rendering --------------------------------------------------------
-
-
-class Item:
-    __slots__ = ("text", "children")
-
-    def __init__(self, text: str) -> None:
-        self.text = [text]
-        self.children: list[Item] = []
-
-
-LIST_MARKER = re.compile(r"^(\s*)[-*+]\s+(.*)$")
-
-
-def _render_list(lines: list[str]) -> str:
-    roots: list[Item] = []
-    stack: list[tuple[int, Item]] = []
-
-    for line in lines:
-        marker = LIST_MARKER.match(line)
-        if marker:
-            indent, body = len(marker.group(1)), marker.group(2)
-            while stack and stack[-1][0] >= indent:
-                stack.pop()
-            item = Item(body)
-            if stack:
-                stack[-1][1].children.append(item)
-            else:
-                roots.append(item)
-            stack.append((indent, item))
-        elif stack:
-            # Continuation of the item above ("  the rest of the sentence").
-            stack[-1][1].text.append(line.strip())
-
-    def render(items: list[Item], depth: int) -> list[str]:
-        pad = "  " * depth
-        out = [f"{pad}<ul>"]
-        for item in items:
-            body = render_inline(" ".join(item.text))
-            if item.children:
-                out.append(f"{pad}  <li>{body}")
-                out.extend(render(item.children, depth + 2))
-                out.append(f"{pad}  </li>")
-            else:
-                out.append(f"{pad}  <li>{body}</li>")
-        out.append(f"{pad}</ul>")
-        return out
-
-    return "\n".join(render(roots, 0))
+PARSER = _new_parser()
 
 
 def render_markdown(markdown: str) -> str:
-    lines = markdown.splitlines()
-    out: list[str] = []
-    paragraph: list[str] = []
-    lists: list[str] = []
-    fence: list[str] | None = None
-
-    def flush_paragraph() -> None:
-        if paragraph:
-            out.append(f"<p>{render_inline(' '.join(paragraph))}</p>")
-            paragraph.clear()
-
-    def flush_list() -> None:
-        if lists:
-            out.append(_render_list(lists))
-            lists.clear()
-
-    def flush() -> None:
-        flush_paragraph()
-        flush_list()
-
-    for line in lines:
-        if fence is not None:
-            if line.strip().startswith("```"):
-                out.append("<pre><code>" + _escape("\n".join(fence)) + "</code></pre>")
-                fence = None
-            else:
-                fence.append(line)
-            continue
-
-        stripped = line.strip()
-        if stripped.startswith("```"):
-            flush()
-            fence = []
-            continue
-        if not stripped:
-            flush()
-            continue
-
-        heading = re.match(r"^(#{1,6})\s+(.*?)\s*#*$", stripped)
-        if heading:
-            flush()
-            level = len(heading.group(1))
-            out.append(f"<h{level}>{render_inline(heading.group(2))}</h{level}>")
-            continue
-        if re.match(r"^(?:-{3,}|\*{3,}|_{3,})$", stripped):
-            flush()
-            out.append("<hr>")
-            continue
-        if LIST_MARKER.match(line):
-            flush_paragraph()
-            lists.append(line)
-            continue
-        if lists:
-            lists.append(line)
-            continue
-        paragraph.append(stripped)
-
-    if fence is not None:
-        raise SectionError("unclosed ``` code fence in the github-pages section")
-    flush()
-    return "\n".join(out)
+    """Convert the extracted README section to an HTML fragment."""
+    tokens = PARSER.parse(markdown)
+    _rewrite_urls(tokens)
+    return PARSER.renderer.render(tokens, PARSER.options, {})
 
 
 # --- extraction -------------------------------------------------------------
@@ -282,7 +160,7 @@ def main(argv: list[str]) -> int:
     source, destination = Path(argv[1]), Path(argv[2])
     try:
         section = extract_section(source.read_text(encoding="utf-8"))
-        fragment = render_markdown(section) + "\n"
+        fragment = render_markdown(section).strip() + "\n"
     except (OSError, SectionError) as error:
         print(f"{source}: {error}", file=sys.stderr)
         return 1

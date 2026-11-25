@@ -26,6 +26,9 @@ CMakeUserPresets.json
 _ReSharper*
 *.log
 
+# Python bytecode from the GitHub Pages script tests
+__pycache__/
+
 # OS Generated Files
 .DS_Store
 .AppleDouble
