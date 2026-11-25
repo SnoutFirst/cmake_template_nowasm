@@ -3,10 +3,13 @@
 This template starts a C++ project with safe, modern defaults. Each choice
 below explains *why*, so you can keep it, swap it, or turn it off.
 
+This is the WASM-free variant of the upstream template: nothing here is built
+for Emscripten, so the native build is the only configuration there is.
+
 ## Goals
 
 1. Catch bugs at compile time, not in production.
-2. Stay portable across GCC, Clang, MSVC, and Emscripten.
+2. Stay portable across GCC, Clang, and MSVC.
 3. Work the same way as a top-level project or as a subdirectory dependency.
 
 ## Layout
@@ -14,7 +17,7 @@ below explains *why*, so you can keep it, swap it, or turn it off.
 | File | Role |
 | --- | --- |
 | `CMakeLists.txt` | Top-level wiring. |
-| `ProjectOptions.cmake` | All `myproject_*` options and setup macros. |
+| `ProjectOptions.cmake` | All `cmake_template_nowasm_*` options and setup macros. |
 | `Dependencies.cmake` | CPM package fetch, gated by `if(NOT TARGET ...)`. |
 | `cmake/*.cmake` | One concern per file (warnings, sanitizers, hardening, ...). |
 
@@ -38,8 +41,8 @@ on GCC/Clang. Top-level builds add `-Werror` / `/WX`. Source:
 
 ASan and UBSan are on by default for top-level GCC/Clang builds when a link
 probe shows them working. TSan, LSan, and MSan are off — they conflict with
-each other and MSan needs an instrumented standard library. Emscripten and
-MSVC skip the sanitizer pass.
+each other and MSan needs an instrumented standard library. MSVC skips the
+sanitizer pass.
 
 ## Hardening
 
@@ -65,7 +68,7 @@ IPO/LTO is on by default at top level. It is gated through
 [CPM](https://github.com/cpm-cmake/CPM.cmake) fetches sources at configure
 time. Each package is gated by `if(NOT TARGET ...)`, so a parent project can
 supply its own version. `SYSTEM YES` silences warnings from third-party
-headers. Default set: fmt, spdlog, Catch2, CLI11, FTXUI, lefticus/tools.
+headers. Default set: fmt, spdlog, Catch2, CLI11.
 
 ## Testing
 
@@ -77,9 +80,9 @@ headers. Default set: fmt, spdlog, Catch2, CLI11, FTXUI, lefticus/tools.
 
 ## Targets and packaging
 
-`myproject_options` and `myproject_warnings` are `INTERFACE` libraries that
-hold flags. Real targets link them to inherit the configuration without
-touching global state. `CPack` package names embed compiler, version, and
+`cmake_template_nowasm_options` and `cmake_template_nowasm_warnings` are
+`INTERFACE` libraries that hold flags. Real targets link them to inherit the
+configuration without touching global state. `CPack` package names embed compiler, version, and
 short Git SHA, so a binary maps to one build.
 
 ## Defaults for daily use
@@ -89,10 +92,10 @@ The default build type is `RelWithDebInfo` — debuggable and fast.
 
 ## Changing the defaults
 
-Every knob is a CMake option named `myproject_ENABLE_<feature>`. Flip it on
-the configure line, for example:
+Every knob is a CMake option named `cmake_template_nowasm_ENABLE_<feature>`.
+Flip it on the configure line, for example:
 
-    cmake -B build -S . -Dmyproject_ENABLE_CLANG_TIDY=OFF
+    cmake -B build -S . -Dcmake_template_nowasm_ENABLE_CLANG_TIDY=OFF
 
-The `myproject_` prefix is the placeholder the rename workflow replaces, so
-renaming the project is one search-and-replace.
+The prefix is the project name, so renaming the project is one
+search-and-replace.
