@@ -35,11 +35,13 @@ jobs:
       # and your own projects needs
       matrix:
         os:
-          # Pinned rather than *-latest: the toolchains below are installed per
-          # image, and windows-latest no longer provides the "Visual Studio 17
-          # 2022" generator that the msvc jobs configure with.
+          # ubuntu-24.04 and windows-2022 are pinned on purpose: the toolchains
+          # below are installed per image, and windows-latest (Server 2025 with
+          # Visual Studio 2026) no longer provides the "Visual Studio 17 2022"
+          # generator that the msvc jobs configure with. macOS stays on the
+          # -latest label, which is the arm64 image.
           - ubuntu-24.04
-          - macos-14
+          - macos-latest
           - windows-2022
         compiler:
           # you can specify the version after `-` like "llvm-15.0.2".
@@ -72,40 +74,13 @@ jobs:
             enable_ipo: Off
             gcov_executable: "llvm-cov gcov"
 
-          - os: macos-14
+          - os: macos-latest
             enable_ipo: Off
 
           # Set up preferred package generators, for given build configurations
           - build_type: Release
             packaging_maintainer_mode: On
             package_generator: TBZ2
-
-          # Exactly one Release build per platform is packaged and published
-          # (the "Package" steps feed the pages job). The explicit build_shared
-          # value keeps the entry matching a single matrix combination.
-          - os: ubuntu-24.04
-            compiler: gcc-14
-            generator: "Ninja Multi-Config"
-            build_type: Release
-            packaging_maintainer_mode: ON
-            build_shared: OFF
-            package: true
-
-          - os: macos-14
-            compiler: llvm-19.1.1
-            generator: "Ninja Multi-Config"
-            build_type: Release
-            packaging_maintainer_mode: ON
-            build_shared: OFF
-            package: true
-
-          - os: windows-2022
-            compiler: msvc
-            generator: "Visual Studio 17 2022"
-            build_type: Release
-            packaging_maintainer_mode: ON
-            build_shared: OFF
-            package: true
 
           # This exists solely to make sure a non-multiconfig build works
           - os: ubuntu-24.04
@@ -229,9 +204,18 @@ jobs:
       #
       # They are uploaded as workflow artifacts and attached to the rolling
       # "ci-latest" Release by the pages job: never committed to the repository.
+      #
+      # The conditions below pick exactly one Release build per platform (there
+      # are several per OS in the matrix). They are written out in full because
+      # an `include:` entry that does not match a matrix combination would add
+      # another job instead of marking an existing one.
+
 
       - name: Package (Linux tarball)
-        if: matrix.package && runner.os == 'Linux'
+        if: >-
+          runner.os == 'Linux' && matrix.build_type == 'Release' &&
+          matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'gcc-14' &&
+          matrix.generator == 'Ninja Multi-Config'
         shell: bash
         run: |
           set -euo pipefail
@@ -240,7 +224,10 @@ jobs:
             -C "build/src/app/${{ matrix.build_type }}" cmake_template_nowasm
 
       - name: Package (macOS archive)
-        if: matrix.package && runner.os == 'macOS'
+        if: >-
+          runner.os == 'macOS' && matrix.build_type == 'Release' &&
+          matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'llvm-19.1.1' &&
+          matrix.generator == 'Ninja Multi-Config'
         shell: bash
         run: |
           set -euo pipefail
@@ -250,7 +237,10 @@ jobs:
             "cmake_template_nowasm-${sha}-macos-$(uname -m).zip"
 
       - name: Package (Windows archive)
-        if: matrix.package && runner.os == 'Windows'
+        if: >-
+          runner.os == 'Windows' && matrix.build_type == 'Release' &&
+          matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'msvc' &&
+          matrix.generator == 'Visual Studio 17 2022' && matrix.build_shared == 'OFF'
         shell: pwsh
         run: |
           $out = "build/src/app/${{ matrix.build_type }}"
@@ -266,7 +256,16 @@ jobs:
           Compress-Archive -Path "$out/*" -DestinationPath "cmake_template_nowasm-$sha-windows-x64.zip"
 
       - name: Upload packaged binary
-        if: matrix.package
+        if: >-
+          (runner.os == 'Linux' && matrix.build_type == 'Release' &&
+          matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'gcc-14' &&
+          matrix.generator == 'Ninja Multi-Config') ||
+          (runner.os == 'macOS' && matrix.build_type == 'Release' &&
+          matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'llvm-19.1.1' &&
+          matrix.generator == 'Ninja Multi-Config') ||
+          (runner.os == 'Windows' && matrix.build_type == 'Release' &&
+          matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'msvc' &&
+          matrix.generator == 'Visual Studio 17 2022' && matrix.build_shared == 'OFF')
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ runner.os }}
