@@ -35,13 +35,17 @@ jobs:
       # and your own projects needs
       matrix:
         os:
-          # ubuntu-24.04 and windows-2022 are pinned on purpose: the toolchains
-          # below are installed per image, and windows-latest (Server 2025 with
-          # Visual Studio 2026) no longer provides the "Visual Studio 17 2022"
-          # generator that the msvc jobs configure with. macOS stays on the
-          # -latest label, which is the arm64 image.
+          # Pinned on purpose.
+          #
+          # * windows-latest is Server 2025 with Visual Studio 2026, which no
+          #   longer provides the "Visual Studio 17 2022" generator the msvc
+          #   jobs configure with.
+          # * macos-latest is macOS 26, where the AddressSanitizer runtime of
+          #   LLVM 19 hangs on start-up: the Catch2 binaries never return from
+          #   `--list-tests` during the build. macOS 15 is the arm64 image that
+          #   matches the LLVM 19 toolchain.
           - ubuntu-24.04
-          - macos-latest
+          - macos-15
           - windows-2022
         compiler:
           # you can specify the version after `-` like "llvm-15.0.2".
@@ -74,7 +78,7 @@ jobs:
             enable_ipo: Off
             gcov_executable: "llvm-cov gcov"
 
-          - os: macos-latest
+          - os: macos-15
             enable_ipo: Off
 
           # Set up preferred package generators, for given build configurations
