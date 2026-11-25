@@ -211,8 +211,10 @@ jobs:
       #
       # The conditions below pick exactly one Release build per platform (there
       # are several per OS in the matrix). They are written out in full because
-      # an `include:` entry that does not match a matrix combination would add
-      # another job instead of marking an existing one.
+      # an `include:` entry that matches no matrix combination adds a job
+      # instead of marking an existing one. On Windows two entries differ only
+      # in `build_shared` - which the Configure step does not even pass to CMake
+      # - so the shared one is excluded and either of the others will do.
 
 
       - name: Package (Linux tarball)
@@ -244,7 +246,8 @@ jobs:
         if: >-
           runner.os == 'Windows' && matrix.build_type == 'Release' &&
           matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'msvc' &&
-          matrix.generator == 'Visual Studio 17 2022' && matrix.build_shared == 'OFF'
+          matrix.generator == 'Visual Studio 17 2022' &&
+          !(matrix.build_shared == 'On' || matrix.build_shared == true)
         shell: pwsh
         run: |
           $out = "build/src/app/${{ matrix.build_type }}"
@@ -269,7 +272,8 @@ jobs:
           matrix.generator == 'Ninja Multi-Config') ||
           (runner.os == 'Windows' && matrix.build_type == 'Release' &&
           matrix.packaging_maintainer_mode == 'ON' && matrix.compiler == 'msvc' &&
-          matrix.generator == 'Visual Studio 17 2022' && matrix.build_shared == 'OFF')
+          matrix.generator == 'Visual Studio 17 2022' &&
+          !(matrix.build_shared == 'On' || matrix.build_shared == true))
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ runner.os }}
