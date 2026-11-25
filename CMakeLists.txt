@@ -95,7 +95,7 @@ if(MSVC)
 endif()
 
 # set the startup project for the "play" button in MSVC
-set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT intro)
+set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT cmake_template_nowasm)
 
 if(CMAKE_SKIP_INSTALL_RULES)
   return()
@@ -107,7 +107,7 @@ include(cmake/PackageProject.cmake)
 # we know we want to ship
 cmake_template_nowasm_package_project(
   TARGETS
-  intro
+  cmake_template_nowasm
   cmake_template_nowasm_options
   cmake_template_nowasm_warnings
   # FIXME: this does not work! CK
