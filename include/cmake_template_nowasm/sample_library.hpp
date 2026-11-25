@@ -3,7 +3,7 @@
 
 #include <cmake_template_nowasm/sample_library_export.hpp>
 
-[[nodiscard]] SAMPLE_LIBRARY_EXPORT int factorial(int) noexcept;
+[[nodiscard]] SAMPLE_LIBRARY_EXPORT int factorial(int input) noexcept;
 
 [[nodiscard]] constexpr int factorial_constexpr(int input) noexcept
 {
