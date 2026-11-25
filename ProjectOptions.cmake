@@ -7,11 +7,7 @@ include(CheckCXXSourceCompiles)
 
 
 macro(cmake_template_nowasm_supports_sanitizers)
-  # Emscripten doesn't support sanitizers
-  if(EMSCRIPTEN)
-    set(SUPPORTS_UBSAN OFF)
-    set(SUPPORTS_ASAN OFF)
-  elseif((CMAKE_CXX_COMPILER_ID MATCHES ".*Clang.*" OR CMAKE_CXX_COMPILER_ID MATCHES ".*GNU.*") AND NOT WIN32)
+  if((CMAKE_CXX_COMPILER_ID MATCHES ".*Clang.*" OR CMAKE_CXX_COMPILER_ID MATCHES ".*GNU.*") AND NOT WIN32)
 
     message(STATUS "Sanity checking UndefinedBehaviorSanitizer, it should be supported on this platform")
     set(TEST_PROGRAM "int main() { return 0; }")
@@ -172,16 +168,14 @@ macro(cmake_template_nowasm_local_options)
   include(cmake/Linker.cmake)
   # Must configure each target with linker options, we're avoiding setting it globally for now
 
-  if(NOT EMSCRIPTEN)
-    include(cmake/Sanitizers.cmake)
-    cmake_template_nowasm_enable_sanitizers(
-      cmake_template_nowasm_options
-      ${cmake_template_nowasm_ENABLE_SANITIZER_ADDRESS}
-      ${cmake_template_nowasm_ENABLE_SANITIZER_LEAK}
-      ${cmake_template_nowasm_ENABLE_SANITIZER_UNDEFINED}
-      ${cmake_template_nowasm_ENABLE_SANITIZER_THREAD}
-      ${cmake_template_nowasm_ENABLE_SANITIZER_MEMORY})
-  endif()
+  include(cmake/Sanitizers.cmake)
+  cmake_template_nowasm_enable_sanitizers(
+    cmake_template_nowasm_options
+    ${cmake_template_nowasm_ENABLE_SANITIZER_ADDRESS}
+    ${cmake_template_nowasm_ENABLE_SANITIZER_LEAK}
+    ${cmake_template_nowasm_ENABLE_SANITIZER_UNDEFINED}
+    ${cmake_template_nowasm_ENABLE_SANITIZER_THREAD}
+    ${cmake_template_nowasm_ENABLE_SANITIZER_MEMORY})
 
   set_target_properties(cmake_template_nowasm_options PROPERTIES UNITY_BUILD ${cmake_template_nowasm_ENABLE_UNITY_BUILD})
 
