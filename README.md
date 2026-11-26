@@ -152,10 +152,13 @@ repository is no longer marked as a template). It:
 * replaces `cmake_template_nowasm` with your repository's name — with `-` and
   `.` turned into `_`, because the name is also a C++ identifier and the prefix
   of every CMake option — in every tracked file: `CMakeLists.txt`,
-  `ProjectOptions.cmake`, the presets, the headers, the tests, the includes,
-  the CI matrix and the page scripts. `SnoutFirst/cmake_template_nowasm`
-  becomes your `<org>/<repo>`, so the project URL and the download-page
-  defaults follow too;
+  `ProjectOptions.cmake`, `CMakePresets.json`, `.github/constants.env`, the
+  headers, the tests, the includes and the page scripts.
+  `SnoutFirst/cmake_template_nowasm` becomes your `<org>/<repo>`, so the
+  project URL and the download-page defaults follow too. The workflows are
+  never rewritten (a `GITHUB_TOKEN` push cannot update a workflow file — only
+  delete one), so `ci.yml` takes the project name from
+  `.github/constants.env` and authors its Pages commit as `github.actor`;
 * renames `include/cmake_template_nowasm/` to match;
 * writes `README.md` for your project from `.github/template/README.md`, with
   your description and your download-page URL filled in;
@@ -163,6 +166,10 @@ repository is no longer marked as a template). It:
 * builds the result with `-D<project>_PACKAGING_MAINTAINER_MODE=ON` (sanitizers,
   clang-tidy, cppcheck and IPO/LTO off, so it needs no extra tooling) and only
   then commits everything as *Template Janitor*.
+
+The cleanup commit is pushed with the repository's own `GITHUB_TOKEN`, which
+may delete the janitor's workflow file but may not modify one — hence the
+separation above.
 
 While this repository is still a GitHub template the same job is a dry run: it
 renames with deliberately awkward fake names (`my-unsafe.project`, a
@@ -175,7 +182,7 @@ repository. Nothing else needs renaming by hand; `grep -rl
 cmake_template_nowasm .` finds every occurrence if you would rather do it
 yourself.
 
-One caveat: the cleanup commit is pushed with the repository's own
-`GITHUB_TOKEN`, and a push made with that token does not start another workflow
-run. The first `ci` run still describes the un-renamed template, so the release
-assets and the download page catch up on your next push to `main`.
+One caveat: a push made with that token does not start another workflow run,
+so the first `ci` run in the new repository still describes the un-renamed
+template — the release assets and the download page catch up on your next push
+to `main`.

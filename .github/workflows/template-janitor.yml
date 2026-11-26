@@ -121,12 +121,15 @@ jobs:
             git mv "$path" "$target"
           done < <(git ls-files -z | grep -z "$TEMPLATE_NAME" || true)
 
-          # The Pages commit in ci.yml is authored as this repository's owner
-          # rather than as the template's author.
-          sed -i \
-            -e "s|user_name: SnoutFirst|user_name: ${{ github.repository_owner }}|" \
-            -e "s|user_email: snoutfirst@protonmail.com|user_email: ${{ github.repository_owner }}@users.noreply.github.com|" \
-            .github/workflows/ci.yml
+          # Nothing in .github/workflows/ may be *updated* here: a push made
+          # with GITHUB_TOKEN is refused if it creates or modifies a workflow
+          # file ("refusing to allow a GitHub App to create or update workflow
+          # ... without workflows permission"), and that permission cannot be
+          # granted to GITHUB_TOKEN. Deleting is allowed, which is why the
+          # janitor can remove itself. The workflows therefore have to be
+          # name-agnostic: ci.yml takes the project name from
+          # .github/constants.env (renamed above) and its Pages commit is
+          # authored as github.actor.
 
       - name: Write the README for the new project
         run: |

@@ -226,8 +226,8 @@ jobs:
         run: |
           set -euo pipefail
           sha=$(git rev-parse --short=7 HEAD)
-          tar -czf "cmake_template_nowasm-${sha}-linux-x86_64.tar.gz" \
-            -C "build/src/app/${{ matrix.build_type }}" cmake_template_nowasm
+          tar -czf "${{ env.PROJECT_NAME }}-${sha}-linux-x86_64.tar.gz" \
+            -C "build/src/app/${{ matrix.build_type }}" "${{ env.PROJECT_NAME }}"
 
       - name: Package (macOS archive)
         if: >-
@@ -239,8 +239,8 @@ jobs:
           set -euo pipefail
           sha=$(git rev-parse --short=7 HEAD)
           ditto -c -k --sequesterRsrc \
-            "build/src/app/${{ matrix.build_type }}/cmake_template_nowasm" \
-            "cmake_template_nowasm-${sha}-macos-$(uname -m).zip"
+            "build/src/app/${{ matrix.build_type }}/${{ env.PROJECT_NAME }}" \
+            "${{ env.PROJECT_NAME }}-${sha}-macos-$(uname -m).zip"
 
       - name: Package (Windows archive)
         if: >-
@@ -260,7 +260,7 @@ jobs:
           $crt = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory |
             Sort-Object Name | Select-Object -Last 1
           Copy-Item "$($crt.FullName)\*.dll" $out
-          Compress-Archive -Path "$out/*" -DestinationPath "cmake_template_nowasm-$sha-windows-x64.zip"
+          Compress-Archive -Path "$out/*" -DestinationPath "${{ env.PROJECT_NAME }}-$sha-windows-x64.zip"
 
       - name: Upload packaged binary
         if: >-
@@ -278,8 +278,8 @@ jobs:
         with:
           name: binaries-${{ runner.os }}
           path: |
-            cmake_template_nowasm-*.tar.gz
-            cmake_template_nowasm-*.zip
+            ${{ env.PROJECT_NAME }}-*.tar.gz
+            ${{ env.PROJECT_NAME }}-*.zip
           if-no-files-found: error
 
       - name: Publish Tagged Release
@@ -356,7 +356,7 @@ jobs:
           merge-multiple: true
 
       # The commit sha is dropped from the published names so that
-      # releases/download/ci-latest/cmake_template_nowasm-linux-x86_64.tar.gz
+      # releases/download/ci-latest/<project>-linux-x86_64.tar.gz
       # stays a stable link; the page shows which commit it was built from.
       - name: Give the archives stable names
         run: |
@@ -410,8 +410,8 @@ jobs:
           # it with a fresh orphan commit: a forced rewrite makes every mirror
           # of this repository report a diverged branch.
           keep_history: true
-          user_name: SnoutFirst
-          user_email: snoutfirst@protonmail.com
+          user_name: ${{ github.actor }}
+          user_email: ${{ github.actor }}@users.noreply.github.com
 
   release-assets:
     name: Attach binaries to the GitHub Release
