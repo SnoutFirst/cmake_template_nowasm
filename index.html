@@ -87,6 +87,9 @@ the game used, are no longer fetched.</li>
 it as a workflow artifact, attaches the archives to a rolling <code>ci-latest</code>
 release and publishes a download page to GitHub Pages — the same mechanism
 used by <a href="https://github.com/SnoutFirst/QtWatchAllVideos">QtWatchAllVideos</a>.</li>
+<li><strong>The cleanup workflow restored.</strong> A repository generated from this template
+is renamed, documented and cleaned up by
+<code>.github/workflows/template-janitor.yml</code>, exactly as upstream does it.</li>
 <li><strong>Two fixes the upstream generation step left behind.</strong> <code>CMakePresets.json</code>
 still named its analyzer options <code>myproject_*</code>, so the Windows presets
 disabled nothing and <code>presets.windows_disables_static_analysis</code> failed; and
@@ -95,7 +98,7 @@ rejects (this failed every macOS job).</li>
 </ul>
 
 <footer>
-  Built from <code>main</code> at commit <code>f7e7dbc</code> by GitHub Actions.
+  Built from <code>main</code> at commit <code>d2d9cff</code> by GitHub Actions.
   The archives are attached to the
   <a href="https://github.com/SnoutFirst/cmake_template_nowasm/releases/tag/ci-latest">rolling CI release</a>
   so that no build output is ever committed. Older builds are kept as workflow
